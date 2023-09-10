@@ -1,7 +1,6 @@
 import random
 import string
 import hashlib
-import time
 
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import hashes
@@ -121,10 +120,10 @@ def verify_zkp(voter_public_key, encrypted_vote_hashed, signature_zkp):
         return False
 
 
-def verify_third_party(centers_list):
+def verify_third_party(centers_list, number_centers):
     valid_votes = 0
     invalid_votes = 0
-    center = centers_list[0]
+    center = centers_list[random.randint(0, number_centers)]
     for vote in center.collected_votes:
         voter_public_key = vote[2]
         encrypted_vote_hashed = vote[1][0]
@@ -134,9 +133,9 @@ def verify_third_party(centers_list):
         else:
             invalid_votes += 1
     if valid_votes == center.valid_votes:
-        print("Голоса были верифицированы третьей стороной и выборы признаны состоявшимися.")
+        print("Голоса были верифицированы стейкхолдером и выборы признаны состоявшимися.")
     else:
-        print("Третьей стороне не удалось верифицировать голоса и выборы признаны не состоявшимися.")
+        print("Стейкхолдеру не удалось верифицировать голоса и выборы признаны не состоявшимися.")
 
 
 def voter_registration(voters_list):
@@ -184,7 +183,7 @@ def begin_elections_scenario_1():
     for center in centers_list:
         center.tally_votes()
     print("Проводим верификацию голосования стейкхолдером...")
-    verify_third_party(centers_list)
+    verify_third_party(centers_list, number_centers)
 
 
 def begin_elections_scenario_2():
@@ -209,7 +208,7 @@ def begin_elections_scenario_2():
     for center in centers_list:
         center.tally_votes()
     print("Проводим верификацию голосования стейкхолдером...")
-    verify_third_party(centers_list)
+    verify_third_party(centers_list, number_centers)
 
 
 def begin_elections_scenario_3():
@@ -235,12 +234,12 @@ def begin_elections_scenario_3():
     for center in centers_list:
         center.tally_votes()
     print("Проводим верификацию голосования стейкхолдером...")
-    verify_third_party(centers_list)
+    verify_third_party(centers_list, number_centers)
 
 
 scenario = int(input("Выберите сценарий голосования:\n"
                      "1. Сценарий без эксцессов\n"
-                     "2. Сценарий с попыткой проголосовать без валидного id\n"
+                     "2. Сценарий с попыткой проголосовать без валидного ID\n"
                      "3. Cценарий с попыткой проголосовать дважды\n"))
 if scenario == 1:
     begin_elections_scenario_1()
