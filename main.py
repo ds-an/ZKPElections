@@ -42,6 +42,9 @@ class Voter:
         self.malicious = False
 
     def vote_secure(self, centers_list):
+        # Голосующий подключается к защищенному интерфейсу и передает каждому центру подсчета
+        # уникальный пакет с зашифрованным голосом, парой подпись/хеш этого голоса
+        # и собственным публичным ключом.
         for center in centers_list:
             encrypted_vote = encrypt_rsa(center.public_key, self.vote_preference)
             zkp_hash_signature = create_zkp_signature(self.private_key, encrypted_vote)
@@ -56,12 +59,17 @@ class Center:
         self.private_key = key_pair[0]
         self.public_key = key_pair[1]
         self.collected_votes = []
+        self.collected_votes_hash = 0
         self.valid_votes = 0
         self.invalid_votes = 0
         self.votes_democrat = 0
         self.votes_republican = 0
 
     def tally_votes(self):
+        print(f"Центр подсчета голосов №{self.number_of_center} гарантирует неприкосновенность собственной"
+              f" базы собранных голосов.")
+        self.collected_votes_hash = create_collected_votes_hash(self.private_key, str(self.collected_votes).encode())
+        print(f"Центр подсчета №{self.number_of_center} ведет подсчет голосов...")
         for vote in self.collected_votes:
             voter_public_key = vote[2]
             encrypted_vote_hashed = vote[1][0]
@@ -106,6 +114,17 @@ def create_zkp_signature(voter_private_key, encrypted_vote):
     return encrypted_vote_hashed, signature_zkp
 
 
+def create_collected_votes_hash(center_private_key, collected_votes):
+    collected_votes_hashed = hashlib.sha256(collected_votes).digest()
+    signature = center_private_key.sign(
+        collected_votes_hashed,
+        padding.PSS(padding.MGF1(hashes.SHA256()),
+                    padding.PSS.MAX_LENGTH),
+        hashes.SHA256()
+    )
+    return collected_votes_hashed, signature
+
+
 def verify_zkp(voter_public_key, encrypted_vote_hashed, signature_zkp):
     try:
         voter_public_key.verify(
@@ -120,22 +139,41 @@ def verify_zkp(voter_public_key, encrypted_vote_hashed, signature_zkp):
         return False
 
 
+def verify_collected_votes_hash(center_public_key, collected_votes_hashed, signature):
+    try:
+        center_public_key.verify(
+            signature, collected_votes_hashed, padding.PSS(
+                padding.MGF1(hashes.SHA256()),
+                padding.PSS.MAX_LENGTH
+            ),
+            hashes.SHA256()
+        )
+        return True
+    except Exception as exception:
+        return False
+
+
 def verify_third_party(centers_list, number_centers):
     valid_votes = 0
     invalid_votes = 0
-    center = centers_list[random.randint(0, number_centers)]
-    for vote in center.collected_votes:
-        voter_public_key = vote[2]
-        encrypted_vote_hashed = vote[1][0]
-        signature_zkp = vote[1][1]
-        if verify_zkp(voter_public_key, encrypted_vote_hashed, signature_zkp):
-            valid_votes += 1
+    center = centers_list[random.randint(0, number_centers - 1)]
+    if verify_collected_votes_hash(center.public_key, center.collected_votes_hash[0],
+                                   center.collected_votes_hash[1]):
+        for vote in center.collected_votes:
+            voter_public_key = vote[2]
+            encrypted_vote_hashed = vote[1][0]
+            signature_zkp = vote[1][1]
+            if verify_zkp(voter_public_key, encrypted_vote_hashed, signature_zkp):
+                valid_votes += 1
+            else:
+                invalid_votes += 1
+        if valid_votes == center.valid_votes:
+            print("Голоса были верифицированы стейкхолдером и выборы признаны состоявшимися.")
         else:
-            invalid_votes += 1
-    if valid_votes == center.valid_votes:
-        print("Голоса были верифицированы стейкхолдером и выборы признаны состоявшимися.")
+            print("Стейкхолдеру не удалось верифицировать голоса и выборы признаны не состоявшимися.")
     else:
-        print("Стейкхолдеру не удалось верифицировать голоса и выборы признаны не состоявшимися.")
+        print("Стейкхолдеру не удалось верифицировать переданный центром подсчета"
+              " набор данных.")
 
 
 def voter_registration(voters_list):
@@ -179,7 +217,9 @@ def begin_elections_scenario_1():
         if check_voter_registration(voter, registered_voters_list):
             voter.vote_secure(centers_list)
         else:
-            print(f"The voter {voter.id} not on the list")
+            # print(f"The voter {voter.id} not on the list")
+            pass
+    print("Начинаем подсчет голосов.")
     for center in centers_list:
         center.tally_votes()
     print("Проводим верификацию голосования стейкхолдером...")
