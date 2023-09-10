@@ -1,3 +1,6 @@
+# Работа выполнена Малюковым Андреем и Розой Басс
+# Для корректной работы приложения необходимо загрузить модуль cryptography
+
 import random
 import string
 import hashlib
